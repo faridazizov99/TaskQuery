@@ -1,0 +1,242 @@
+/* 
+OUTLINE: This task was completed using many tools only one of which was SQL. 
+The tables that the queries in this file result are not always the final versions of the tables, and some of them provide inaccurate information. 
+hey got eliminated or improved in the process of the data analysis.
+
+Overall this file exists and published just to provide you with an idea of the funcitons and queries I am using to perform the analysis
+
+*/
+
+
+--RFM ANALYSIS
+select 
+  [Buyer Name], 
+  sum(budget) as MonetaryValue, 
+  avg(budget) as AvgMonetaryValue, 
+  max(AwardDate) as maxdate, 
+  count([Buyer Name]) as Frequency, 
+  (
+    select 
+      datediff(
+        dd, 
+        max(AwardDate), 
+        '2021-05-17 11:04:34.8190000 +02:00'
+      )
+  ) as Recency 
+from 
+  task..Tender$ 
+where 
+  AwardDate != 'NULL' 
+  and AwardStatus = 'Awarded' 
+group by 
+  [Buyer Name]
+), 
+rfm_calc as (
+  select 
+    buyername, 
+    NTILE(4) OVER (
+      order by 
+        Recency desc
+    ) as rfm_recency, 
+    NTILE(4) OVER (
+      order by 
+        Frequency
+    ) as rfm_frequency, 
+    NTILE(4) OVER (
+      order by 
+        MonetaryValue
+    ) as rfm_monetary 
+  from 
+    task..vol1$ 
+  select 
+    rfm_recency + rfm_frequency + rfm_monetary as rfm_cell, 
+    cast(rfm_recency as varchar) + cast(rfm_frequency as varchar) + cast(rfm_monetary as varchar) rfm_cell_string 
+  from 
+    task..vol2$ 
+  select 
+    BuyerName, 
+    rfm_recency, 
+    rfm_frequency, 
+    rfm_monetary, 
+    case when CAST(rfm_cell_string as int) in (
+      111, 112, 121, 122, 123, 132, 211, 212, 
+      114, 141, 113, 214, 124
+    ) then 'lost_customers' --lost customers
+    when rfm_cell_string in (
+      133, 134, 143, 244, 144, 221, 131, 142, 
+      213, 243, 234, 224
+    ) then 'slipping away cannot lose' -- (Big spenders who haven’t purchased lately) slipping away
+    when rfm_cell_string in (311, 411, 331, 412, 413, 414) then 'new customers' when rfm_cell_string in (222, 223, 233, 322, 424) then 'potential highpayers' when rfm_cell_string in (
+      323, 333, 321, 422, 332, 432, 441, 421, 
+      231, 241, 232, 242, 423, 324
+    ) then 'active customers, price sensitive' --(Customers who buy often & recently, but at low price points)
+    when rfm_cell_string in (
+      433, 434, 443, 444, 431, 341, 342, 442, 
+      334, 343, 344
+    ) then 'loyal customers' end rfm_segment 
+  from 
+    task..vol3$ 
+--end of RFM analysis
+
+-- SUPPLIERS
+  select 
+    [Supplier Name], 
+    min(BeginDate) as 'When', 
+    min(location) as 'Where', 
+    SUM(Budget) as 'HowMuch', 
+    COUNT([AwardStatus]) as NumberOfSales 
+  from 
+    task..Tender$ 
+  group by 
+    [Supplier Name] 
+  order by 
+    [Supplier Name] asc 
+	
+-- Most popular city
+  select 
+    location, 
+    COUNT(location) as popularity 
+  from 
+    task..Tender$ 
+  group by 
+    location 
+  order by 
+    popularity desc 
+	
+-- Most popular contract type
+  select 
+    ContractType, 
+    COUNT(ContractType) as popularity 
+  from 
+    task..Tender$ 
+  group by 
+    ContractType 
+  order by 
+    popularity desc 
+
+--how many times they buy
+  select 
+    DISTINCT([Buyer Name]), 
+    COUNT([Buyer Name]) as NumberOfPurchases 
+  from 
+    task..Tender$ 
+  group by 
+    [Buyer Name] 
+  order by 
+    NumberOfPurchases desc 
+
+--what they buy
+  select 
+    DISTINCT([Buyer Name]), 
+    description, 
+    SUM(Budget) as TotalPurchasesPerDescription 
+  from 
+    task..Tender$ 
+  group by 
+    [Buyer Name], 
+    Description 
+  order by 
+    [Buyer Name] asc 
+
+-- when and where, dates don't repeat 4484
+  select 
+    [Buyer Name], 
+    BeginDate, 
+    Location, 
+    Budget 
+  from 
+    task..Tender$ 
+  where 
+    AwardStatus = 'Awarded' 
+  group by 
+    [Buyer Name], 
+    BeginDate, 
+    Location, 
+    budget 
+  order by 
+    Budget desc 
+--4507
+  select 
+    [Buyer Name], 
+    BeginDate, 
+    Location, 
+    budget 
+  from 
+    task..Tender$ 
+  group by 
+    [Buyer Name], 
+    BeginDate, 
+    Location, 
+    budget 
+  order by 
+    [Buyer Name] asc 
+
+-- Complete table Awarded Only
+  select 
+    [Supplier Name], 
+    min(BeginDate) as 'When', 
+    min(location) as 'Where', 
+    SUM(
+      CAST(AwardValue as int)
+    ) as 'AwardedValue', 
+    COUNT([AwardStatus]) as NumberOfPurchases 
+  from 
+    task..Tender$ 
+  where 
+    AwardStatus = 'Awarded' 
+  group by 
+    [Supplier Name] 
+  order by 
+    AwardedValue desc 
+
+-- Top Porducts
+  select 
+    [Buyer Name], 
+    SUM(Budget) as TotalPurchasesPerDescription 
+  from 
+    task..Tender$ 
+  group by 
+    [Buyer Name] 
+  order by 
+    TotalPurchasesPerDescription desc 
+--end Top Products
+
+
+  select 
+    [Supplier Name], 
+    min(BeginDate) as 'When', 
+    min(location) as 'Where', 
+    SUM(
+      CAST(AwardValue as int)
+    ) as 'AwardedValue', 
+    COUNT([AwardStatus]) as NumberOfPurchases 
+  from 
+    task..Tender$ 
+  where 
+    AwardStatus = 'Awarded' 
+  group by 
+    [Supplier Name] 
+  order by 
+    AwardedValue desc 
+  select 
+    [Buyer Name], 
+    SUM(Budget) as TotalPurchasesPerDescription 
+  from 
+    task..Tender$ 
+  group by 
+    [Buyer Name] 
+  order by 
+    TotalPurchasesPerDescription desc 
+  select 
+    [Supplier Name], 
+    min(BeginDate) as 'When', 
+    min(location) as 'Where', 
+    SUM(Budget) as 'HowMuch', 
+    COUNT([AwardStatus]) as NumberOfSales 
+  from 
+    task..Tender$ 
+  group by 
+    [Supplier Name] 
+  order by 
+    [Supplier Name] asc 
+  
